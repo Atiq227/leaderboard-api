@@ -97,8 +97,30 @@ def top():
         (r.get("duration") if r.get("duration") is not None else 10**12),
         -(r.get("ts") or 0)
     ))
-    public = [{"name": r.get("name",""), "score": r.get("score",0), "duration": r.get("duration")} for r in rows[:n]]
+    public = [{"name": r.get("name",""), "score": r.get("score",0), "player_id": r.get("player_id", "")} for r in rows[:n]]
     return jsonify(public)
+
+@app.delete("/score/<player_id>")
+def delete_score(player_id):
+    # Simple admin protection
+    admin_token = request.headers.get("X-Admin-Token", "")
+    if admin_token != os.environ.get("ADMIN_TOKEN", ""):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    pid = (player_id or "").strip()
+    if not pid:
+        return jsonify({"ok": False, "error": "invalid_player_id"}), 400
+
+    rows = load_db()
+    before = len(rows)
+    rows = [r for r in rows if r.get("player_id") != pid]
+    deleted = before - len(rows)
+
+    if deleted > 0:
+        save_db(rows)
+
+    return jsonify({"ok": True, "deleted": deleted})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))
