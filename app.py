@@ -27,9 +27,11 @@ def save_db(rows):
 @app.post("/submit")
 def submit():
     body = request.get_json(silent=True) or {}
-    name = (body.get('name') or '').strip()[:24]
-    score = body.get('score')
-    duration = body.get('duration')
+
+    player_id = (str(body.get("player_id") or "")).strip()[:64]
+    name = (str(body.get("name") or "")).strip()[:24]
+    score = body.get("score")
+    duration = body.get("duration")
 
     try:
         score = int(score)
@@ -40,36 +42,63 @@ def submit():
     except:
         duration = None
 
-    if not name or score <= 0:
+    if not player_id or not name or score <= 0:
         return jsonify({"ok": False, "error": "invalid_input"}), 400
 
     rows = load_db()
-    rows.append({
+
+    idx = next((i for i, r in enumerate(rows) if r.get("player_id") == player_id), None)
+
+    now_ms = int(time.time() * 1000)
+    new_row = {
+        "player_id": player_id,
         "name": name,
         "score": max(0, score),
         "duration": max(0, duration) if duration is not None else None,
-        "ts": int(time.time()*1000)
-    })
+        "ts": now_ms
+    }
 
-    rows.sort(key=lambda r: (-r["score"],
-                             r["duration"] if r["duration"] is not None else 999999,
-                             r["ts"]))
-    rows = rows[:MAX_ENTRIES]
+    if idx is None:
+        rows.append(new_row)
+        outcome = "inserted"
+    else:
+        old = rows[idx]
+        old_score = int(old.get("score") or 0)
+        old_dur = old.get("duration")
+        better = (new_row["score"] > old_score) or (
+            new_row["score"] == old_score and
+            new_row["duration"] is not None and old_dur is not None and
+            new_row["duration"] < old_dur
+        )
+        if better:
+            rows[idx] = new_row
+            outcome = "updated"
+        else:
+            old["name"] = name
+            rows[idx] = old
+            outcome = "kept"
+
+    rows = rows[-MAX_ENTRIES:]
     save_db(rows)
-    return jsonify({"ok": True})
+
+    return jsonify({"ok": True, "result": outcome})
 
 @app.get("/top")
 def top():
     try:
-        n = int(request.args.get("n", 10))
+        n = int(request.args.get("n", PUBLIC_TOP))
     except:
-        n = 10
-    n = min(n, PUBLIC_TOP)
-    rows = load_db()[:n]
-    return jsonify([
-        {"name": r["name"], "score": r["score"], "duration": r.get("duration"), "ts": r["ts"]}
-        for r in rows
-    ])
+        n = PUBLIC_TOP
+    n = max(1, min(n, PUBLIC_TOP))
+
+    rows = load_db()
+    rows.sort(key=lambda r: (
+        -(r.get("score") or 0),
+        (r.get("duration") if r.get("duration") is not None else 10**12),
+        -(r.get("ts") or 0)
+    ))
+    public = [{"name": r.get("name",""), "score": r.get("score",0), "duration": r.get("duration")} for r in rows[:n]]
+    return jsonify(public)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))
