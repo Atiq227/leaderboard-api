@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify
 import json, os, time
-
+from flask_cors import CORS
 app = Flask(__name__)
+CORS(app)
 
 DB_FILE = 'leaderboard.json'
 MAX_ENTRIES = 1000
