@@ -125,10 +125,10 @@ def delete_score(player_id):
     return jsonify({"ok": True, "deleted": deleted})
 
 def keep_awake():
-    """Ping self every 30 seconds to prevent sleeping (for testing)"""
+    """Ping self every 13 minutes to prevent sleeping (for testing)"""
     while True:
         try:
-            time.sleep(30)  # Sleep for 30 seconds (testing)
+            time.sleep(13 * 60)  # Sleep for 13 minutes (testing)
             requests.get('https://leaderboard-api-2.onrender.com/top?n=50', timeout=10)
             print('Self-ping successful')
         except Exception as e:
