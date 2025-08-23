@@ -1,6 +1,9 @@
 from flask import Flask, request, jsonify
 import json, os, time
 from flask_cors import CORS
+import threading
+import requests  # Moved up with other imports
+
 app = Flask(__name__)
 CORS(app)
 
@@ -103,7 +106,6 @@ def top():
 
 @app.delete("/score/<player_id>")
 def delete_score(player_id):
-    # Simple admin protection
     admin_token = request.headers.get("X-Admin-Token", "")
     if admin_token != os.environ.get("ADMIN_TOKEN", ""):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
@@ -122,6 +124,20 @@ def delete_score(player_id):
 
     return jsonify({"ok": True, "deleted": deleted})
 
+def keep_awake():
+    """Ping self every 30 seconds to prevent sleeping (for testing)"""
+    while True:
+        try:
+            time.sleep(30)  # Sleep for 30 seconds (testing)
+            requests.get('https://leaderboard-api-2.onrender.com/top?n=50', timeout=10)
+            print('Self-ping successful')
+        except Exception as e:
+            print(f'Self-ping failed: {e}')
+
+# Start the keep-awake thread only in production
+if os.environ.get("RENDER"):
+    print("Starting keep-awake thread...")
+    threading.Thread(target=keep_awake, daemon=True).start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))
